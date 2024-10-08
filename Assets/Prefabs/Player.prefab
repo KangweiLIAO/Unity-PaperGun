@@ -45,7 +45,7 @@ AudioSource:
     type: 2}
   m_audioClip: {fileID: 0}
   m_PlayOnAwake: 1
-  m_Volume: 1
+  m_Volume: 0.8
   m_Pitch: 1
   Loop: 0
   Mute: 0
@@ -139,11 +139,10 @@ GameObject:
   m_Component:
   - component: {fileID: 1995243226769190168}
   - component: {fileID: 6816676542078412682}
-  - component: {fileID: 4666946252458630094}
-  - component: {fileID: 5237725586202452736}
-  - component: {fileID: 7359843020467695706}
+  - component: {fileID: -3877865501276388851}
   - component: {fileID: 3031637048322612133}
   - component: {fileID: 498660549840221703}
+  - component: {fileID: 3420648890473411162}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -196,7 +195,7 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!114 &4666946252458630094
+--- !u!114 &-3877865501276388851
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -205,61 +204,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 2044588111641539950}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Script: {fileID: 11500000, guid: e83131bc4acaac34fb6472cde2569bbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 1277953029
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 1
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
---- !u!114 &5237725586202452736
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2044588111641539950}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e66aa5ece46fc91429eea129c4bed6f9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  UseUnreliableDeltas: 0
-  SyncPositionX: 1
-  SyncPositionY: 0
-  SyncPositionZ: 1
-  SyncRotAngleX: 0
-  SyncRotAngleY: 1
-  SyncRotAngleZ: 0
-  SyncScaleX: 0
-  SyncScaleY: 0
-  SyncScaleZ: 0
-  PositionThreshold: 0.001
-  RotAngleThreshold: 0.01
-  ScaleThreshold: 0.01
-  UseQuaternionSynchronization: 0
-  UseQuaternionCompression: 0
-  UseHalfFloatPrecision: 0
-  InLocalSpace: 0
-  Interpolate: 1
-  SlerpPosition: 0
---- !u!114 &7359843020467695706
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2044588111641539950}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  offset: {x: 0, y: 12, z: -4}
+  smoothIdx: 10
+  screenEdgeBuffer: 0.1
 --- !u!114 &3031637048322612133
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -272,12 +225,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 650869fd12302d84ca3b62cd9a935e4e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHealth: 100
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   moveSpeed: 5
   rotationSpeed: 10
   aimMask:
     serializedVersion: 2
     m_Bits: 64
+  currentHealth: 100
 --- !u!114 &498660549840221703
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -290,6 +246,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3eea055f9bbd3d842a57dd5bed6717c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   GunShotClip: {fileID: 8300000, guid: 0e5ec5d798406aa4699be8c44dd7599f, type: 3}
   source: {fileID: 2409297214187711943}
   audioPitch: {x: 0.9, y: 1}
@@ -311,8 +270,24 @@ MonoBehaviour:
   shootableMask:
     serializedVersion: 2
     m_Bits: 64
-  timeLastFired: 0
-  damage: 10
+  localCooldown: 0
+--- !u!114 &3420648890473411162
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2044588111641539950}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sceneId: 0
+  _assetId: 3991315907
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!1 &4526175417265043111
 GameObject:
   m_ObjectHideFlags: 0

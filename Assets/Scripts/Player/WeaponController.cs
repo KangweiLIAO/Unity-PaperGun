@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
-using Unity.Netcode;
+using Mirror;
 
 public class WeaponController : NetworkBehaviour
 {
@@ -40,16 +40,18 @@ public class WeaponController : NetworkBehaviour
     private LayerMask shootableMask;
 
     // --- Timing ---
-    [SerializeField] private float timeLastFired;
+    [SerializeField] private float localCooldown = 0f; // Cooldown for local player
+    private float timeLastFired;
 
-    // --- Configs ---
-    [SerializeField] private float damage = 10f; // Amount of damage this weapon deals
-    private NetworkVariable<float> netDamage = new NetworkVariable<float>(10f);
-    private NetworkVariable<float> netTimeLastFired = new NetworkVariable<float>(0f);
+
+    // --- Damage Configs ---
+    [SyncVar]
+    private float netDamage = 10f;
+
     public float Damage
     {
-        get => netDamage.Value;
-        set => netDamage.Value = value;
+        get => netDamage;
+        set => netDamage = value;
     }
 
     // --- Gizmo Variables ---
@@ -59,9 +61,8 @@ public class WeaponController : NetworkBehaviour
 
     void Start()
     {
+        if (!isLocalPlayer) return;
         if (source != null) source.clip = GunShotClip;
-
-        netDamage = new NetworkVariable<float>(damage);
 
         GameObject cursorObject = GameObject.Find("Crosshair");
         if (cursorObject != null)
@@ -71,12 +72,13 @@ public class WeaponController : NetworkBehaviour
 
         if (cursorImage == null)
         {
-            Debug.LogError("Cursor RawImage with name '" + "Crosshair" + "' not found in the scene!");
+            Debug.LogError("Cursor RawImage not found in the scene!");
         }
     }
 
     void Update()
     {
+        if (!isLocalPlayer) return;
         // Crosshair
         if (cursorImage != null)
         {
@@ -84,9 +86,10 @@ public class WeaponController : NetworkBehaviour
             cursorImage.rectTransform.position = mousePosition + cursorOffset;
         }
 
-        if (IsOwner && Input.GetMouseButton(0) && (Time.time - timeLastFired > shootDelay))
+        if (Input.GetMouseButton(0) && (Time.time >= localCooldown))
         {
-            FireWeaponServerRpc();
+            FireWeapon();
+            localCooldown = Time.time + shootDelay;
         }
     }
 
@@ -109,18 +112,14 @@ public class WeaponController : NetworkBehaviour
     }
 
     #region Weapon Firing
-    [ServerRpc]
-    void FireWeaponServerRpc()
+    [Command]
+    void FireWeapon()
     {
         // Server-side logic
         Vector3 shootDirection = GetShootDirection();
-        lastShootDirection = shootDirection;
-        lastShootPosition = bulletSpawnPoint.position;
-
-        if (Physics.Raycast(bulletSpawnPoint.position, shootDirection, out RaycastHit hit, shootableMask))
+        if (Physics.Raycast(bulletSpawnPoint.position, shootDirection, out RaycastHit serverHit, float.MaxValue, shootableMask))
         {
-            lastHit = hit;  // Save the hit point for gizmo visualization
-            DealDamage(hit);
+            DealDamage(serverHit);
         }
 
         // Trigger client-side effects
@@ -133,7 +132,23 @@ public class WeaponController : NetworkBehaviour
     [ClientRpc]
     private void FireWeaponClientRpc()
     {
+        if (!isLocalPlayer) return;
+
+        Vector3 shootDirection = GetShootDirection();
         PlayShootEffect();
+
+        // Perform client-side raycast for visual effects
+        if (Physics.Raycast(bulletSpawnPoint.position, shootDirection, out RaycastHit clientHit, float.MaxValue, shootableMask))
+        {
+            SpawnBulletTrail(clientHit.point, clientHit.distance);
+            SpawnImpactEffect(clientHit.point, clientHit.normal);
+        }
+        else
+        {
+            // If no hit, show trail going to a far distance
+            Vector3 farPoint = bulletSpawnPoint.position + shootDirection * 1000f;
+            SpawnBulletTrail(farPoint, 1000f);
+        }
     }
 
     private void PlayShootEffect()
@@ -158,16 +173,33 @@ public class WeaponController : NetworkBehaviour
             Invoke("ReEnableDisabledProjectile", 3);
         }
 
-        // Play audio
-        PlayWeaponAudio();
-
-        // Spawn bullet trail
-        SpawnBulletTrail();
+        PlayWeaponAudio(); // Play audio
     }
 
     private void ReEnableDisabledProjectile()
     {
         projectileToDisableOnFire.SetActive(true);
+    }
+
+    /// <summary>
+    /// Get the shoot direction based on the current aim and bullet spread
+    /// </summary>
+    /// <returns></returns>
+    private Vector3 GetShootDirection()
+    {
+        Vector3 direction = currentAim.point - bulletSpawnPoint.position;
+        direction.Normalize();
+
+        if (hasBulletSpread)
+        {
+            direction += new Vector3(
+                Random.Range(-bulletSpreadVariance.x, bulletSpreadVariance.x),
+                Random.Range(-bulletSpreadVariance.y, bulletSpreadVariance.y),
+                Random.Range(-bulletSpreadVariance.z, bulletSpreadVariance.z)
+                );
+            direction.Normalize();
+        }
+        return direction;
     }
 
     private void PlayWeaponAudio()
@@ -189,46 +221,32 @@ public class WeaponController : NetworkBehaviour
         }
     }
 
-    private Vector3 GetShootDirection()
+    // --- Bullet Trail ---
+    private void SpawnBulletTrail(Vector3 hitPoint, float hitDistance)
     {
-        Vector3 direction = currentAim.point - bulletSpawnPoint.position;
-        direction.Normalize();
-
-        if (hasBulletSpread)
-        {
-            direction += new Vector3(
-                Random.Range(-bulletSpreadVariance.x, bulletSpreadVariance.x),
-                Random.Range(-bulletSpreadVariance.y, bulletSpreadVariance.y),
-                Random.Range(-bulletSpreadVariance.z, bulletSpreadVariance.z)
-                );
-            direction.Normalize();
-        }
-        return direction;
+        TrailRenderer trail = Instantiate(bulletTrail, bulletSpawnPoint.position, Quaternion.identity);
+        StartCoroutine(SpawnTrail(trail, hitPoint, hitDistance));
     }
 
-    private void SpawnBulletTrail()
-    {
-        Vector3 shootDirection = GetShootDirection();
-        if (Physics.Raycast(bulletSpawnPoint.position, shootDirection, out RaycastHit hit, shootableMask))
-        {
-            TrailRenderer trail = Instantiate(bulletTrail, bulletSpawnPoint.position, Quaternion.identity);
-            StartCoroutine(SpawnTrail(trail, hit));
-        }
-    }
-
-    private IEnumerator SpawnTrail(TrailRenderer trail, RaycastHit hit)
+    private IEnumerator SpawnTrail(TrailRenderer trail, Vector3 hitPoint, float hitDistance)
     {
         float time = 0;
         Vector3 startPosition = trail.transform.position;
         while (time < 1)
         {
-            trail.transform.position = Vector3.Lerp(startPosition, hit.point, time);
+            trail.transform.position = Vector3.Lerp(startPosition, hitPoint, time);
             time += Time.deltaTime / trail.time;
             yield return null;
         }
-        trail.transform.position = hit.point;
-        GameObject impactObj = Instantiate(impactPrefab, hit.point, Quaternion.LookRotation(hit.normal));
+        trail.transform.position = hitPoint;
+        GameObject impactObj = Instantiate(impactPrefab, hitPoint, Quaternion.LookRotation((startPosition - hitPoint).normalized));
         Destroy(trail.gameObject, trail.time);
+        Destroy(impactObj, impactObj.GetComponent<ParticleSystem>().main.duration);
+    }
+
+    private void SpawnImpactEffect(Vector3 hitPoint, Vector3 hitNormal)
+    {
+        GameObject impactObj = Instantiate(impactPrefab, hitPoint, Quaternion.LookRotation(hitNormal));
         Destroy(impactObj, impactObj.GetComponent<ParticleSystem>().main.duration);
     }
     #endregion
@@ -240,14 +258,15 @@ public class WeaponController : NetworkBehaviour
             PlayerController playerController = hit.collider.GetComponent<PlayerController>();
             if (playerController != null)
             {
-                playerController.TakeDamageServerRpc(damage);
-                Debug.Log($"Dealt {damage} damage to player");
+                playerController.TakeDamage(Damage);
+                Debug.Log($"Dealt {Damage} damage to player");
             }
         }
     }
 
     public void UpdateAimInfo(RaycastHit aimInfo)
     {
+        // if (!IsOwner) return;
         currentAim = aimInfo;
         // Perform any weapon-specific aiming logic here
     }
