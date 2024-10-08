@@ -11,8 +11,12 @@ public class WeaponController : NetworkBehaviour
     public Vector2 audioPitch = new Vector2(.9f, 1.1f);
 
     // --- Crosshair ---
-    public RawImage cursorImage;  // Reference to the UI image that represents the custom cursor
-    public Vector2 cursorOffset;  // Offset to adjust cursor position relative to the mouse position
+    public Vector2 crosshairOffset;  // Offset to adjust cursor position relative to the mouse position
+    public Vector2 crosshairSize = new Vector2(32, 32);
+    public Color crosshairColor = Color.white;  // Default color is white
+    public Texture2D crosshairTexture;
+    private RawImage crosshairImage;  // Reference to the UI image that represents the custom cursor
+    private Canvas crosshairCanvas;
     private RaycastHit currentAim;
 
     // --- Muzzle ---
@@ -59,31 +63,23 @@ public class WeaponController : NetworkBehaviour
     private Vector3 lastShootDirection;
     private RaycastHit lastHit;
 
-    void Start()
+    public override void OnStartLocalPlayer()
     {
+        base.OnStartLocalPlayer();
         if (!isLocalPlayer) return;
+        
         if (source != null) source.clip = GunShotClip;
-
-        GameObject cursorObject = GameObject.Find("Crosshair");
-        if (cursorObject != null)
-        {
-            cursorImage = cursorObject.GetComponent<RawImage>();
-        }
-
-        if (cursorImage == null)
-        {
-            Debug.LogError("Cursor RawImage not found in the scene!");
-        }
+        SetupCrosshair();
     }
 
     void Update()
     {
         if (!isLocalPlayer) return;
         // Crosshair
-        if (cursorImage != null)
+        if (crosshairImage != null)
         {
             Vector2 mousePosition = Input.mousePosition;
-            cursorImage.rectTransform.position = mousePosition + cursorOffset;
+            crosshairImage.rectTransform.position = mousePosition + crosshairOffset;
         }
 
         if (Input.GetMouseButton(0) && (Time.time >= localCooldown))
@@ -250,6 +246,29 @@ public class WeaponController : NetworkBehaviour
         Destroy(impactObj, impactObj.GetComponent<ParticleSystem>().main.duration);
     }
     #endregion
+
+    private void SetupCrosshair()
+    {
+        // Create a new canvas for the crosshair
+        GameObject canvasObject = new GameObject("CrosshairCanvas");
+        crosshairCanvas = canvasObject.AddComponent<Canvas>();
+        crosshairCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvasObject.AddComponent<CanvasScaler>();
+        canvasObject.AddComponent<GraphicRaycaster>();
+
+        // Create a RawImage for the crosshair
+        GameObject crosshairObject = new GameObject("Crosshair");
+        crosshairObject.transform.SetParent(canvasObject.transform, false);
+        crosshairImage = crosshairObject.AddComponent<RawImage>();
+        crosshairImage.texture = crosshairTexture;
+        crosshairImage.rectTransform.sizeDelta = crosshairSize;
+        crosshairImage.color = crosshairColor;
+
+        // Set the crosshair to be centered initially
+        crosshairImage.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        crosshairImage.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        crosshairImage.rectTransform.anchoredPosition = Vector2.zero;
+    }
 
     private void DealDamage(RaycastHit hit)
     {
