@@ -24,7 +24,7 @@ public class WeaponController : NetworkBehaviour
     public GameObject muzzlePosition;
 
     // --- Projectile ---
-    [Tooltip("The projectile gameobject to instantiate each time the weapon is fired.")]
+    [Tooltip("The projectile GameObject to instantiate each time the weapon is fired.")]
     public GameObject projectilePrefab;
     [Tooltip("Sometimes a mesh will want to be disabled on fire. For example: when a rocket is fired, we instantiate a new rocket, and disable" +
         " the visible rocket attached to the rocket launcher")]
@@ -67,7 +67,7 @@ public class WeaponController : NetworkBehaviour
     {
         base.OnStartLocalPlayer();
         if (!isLocalPlayer) return;
-        
+
         if (source != null) source.clip = GunShotClip;
         SetupCrosshair();
     }
@@ -75,6 +75,7 @@ public class WeaponController : NetworkBehaviour
     void Update()
     {
         if (!isLocalPlayer) return;
+
         // Crosshair
         if (crosshairImage != null)
         {
@@ -84,8 +85,8 @@ public class WeaponController : NetworkBehaviour
 
         if (Input.GetMouseButton(0) && (Time.time >= localCooldown))
         {
-            FireWeapon();
-            localCooldown = Time.time + shootDelay;
+            CmdFireWeapon();
+            localCooldown = Time.time + shootDelay; // Set cooldown for server processing
         }
     }
 
@@ -108,9 +109,12 @@ public class WeaponController : NetworkBehaviour
     }
 
     #region Weapon Firing
+    // BUG: The aim direction is not updated on the client, always shooting in the initial aim position
     [Command]
-    void FireWeapon()
+    void CmdFireWeapon()
     {
+        if (Time.time < timeLastFired + shootDelay) return;
+
         // Server-side logic
         Vector3 shootDirection = GetShootDirection();
         if (Physics.Raycast(bulletSpawnPoint.position, shootDirection, out RaycastHit serverHit, float.MaxValue, shootableMask))
@@ -118,19 +122,17 @@ public class WeaponController : NetworkBehaviour
             DealDamage(serverHit);
         }
 
-        // Trigger client-side effects
-        FireWeaponClientRpc();
-
         // Update last fire time
         timeLastFired = Time.time;
+
+        // Trigger client-side effects
+        RpcFireWeapon(shootDirection);
     }
 
     [ClientRpc]
-    private void FireWeaponClientRpc()
+    private void RpcFireWeapon(Vector3 shootDirection)
     {
-        if (!isLocalPlayer) return;
-
-        Vector3 shootDirection = GetShootDirection();
+        // Client-side effects
         PlayShootEffect();
 
         // Perform client-side raycast for visual effects
@@ -145,6 +147,11 @@ public class WeaponController : NetworkBehaviour
             Vector3 farPoint = bulletSpawnPoint.position + shootDirection * 1000f;
             SpawnBulletTrail(farPoint, 1000f);
         }
+
+        // Update last known shoot data for gizmos
+        lastShootPosition = bulletSpawnPoint.position;
+        lastShootDirection = shootDirection;
+        lastHit = clientHit;
     }
 
     private void PlayShootEffect()
@@ -272,13 +279,17 @@ public class WeaponController : NetworkBehaviour
 
     private void DealDamage(RaycastHit hit)
     {
-        if (hit.collider.CompareTag("Player"))
+        if (hit.collider.transform.parent.CompareTag("Player"))
         {
-            PlayerController playerController = hit.collider.GetComponent<PlayerController>();
+            PlayerController playerController = hit.collider.GetComponentInParent<PlayerController>();
             if (playerController != null)
             {
                 playerController.TakeDamage(Damage);
-                Debug.Log($"Dealt {Damage} damage to player");
+                Debug.Log($"{gameObject.name} dealt {Damage} damage to player: {hit.collider.transform.parent.name}");
+            }
+            else
+            {
+                Debug.LogWarning("Hit a Player-tagged object, but couldn't find PlayerController");
             }
         }
     }

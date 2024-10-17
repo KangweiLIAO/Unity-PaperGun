@@ -56,5 +56,8 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "PaperGun.sln"
+    "dotnet.defaultSolution": "PaperGun.sln",
+    "cSpell.words": [
+        "cooldown"
+    ]
 }

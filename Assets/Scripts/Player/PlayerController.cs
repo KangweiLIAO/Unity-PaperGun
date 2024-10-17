@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using Mirror;
+using TMPro;
 
 public class PlayerController : NetworkBehaviour
 {
@@ -15,8 +16,12 @@ public class PlayerController : NetworkBehaviour
     private RaycastHit hit;
     private WeaponController weaponController;
 
+    [SyncVar]
+    private Vector3 syncedAimDirection;
+
     [SyncVar(hook = nameof(OnHealthChanged))]
     [SerializeField] private float currentHealth = 100f;
+    [SerializeField] private TextMeshProUGUI healthText;
 
     public override void OnStartLocalPlayer()
     {
@@ -32,6 +37,7 @@ public class PlayerController : NetworkBehaviour
         weaponController = GetComponent<WeaponController>();
 
         if (!isLocalPlayer) return;
+        UpdateHealthText(currentHealth);
         StartCoroutine(WaitForCamera());
     }
 
@@ -77,7 +83,14 @@ public class PlayerController : NetworkBehaviour
             transform.forward = direction;
             hit = hitInfo; // update the hit info
             weaponController?.UpdateAimInfo(hitInfo); // update the aim info
+            syncedAimDirection = direction;
         }
+    }
+
+    [Command]
+    private void CmdUpdateAimDirection(Vector3 direction)
+    {
+        syncedAimDirection = direction;
     }
 
     private (bool success, RaycastHit hitInfo) GetMousePosition()
@@ -114,7 +127,17 @@ public class PlayerController : NetworkBehaviour
     [ClientRpc]
     private void UpdateHealthClientRpc(float newHealth)
     {
+        if(!isLocalPlayer) return;
         Debug.Log($"Player {netId} health updated to {newHealth}");
+        UpdateHealthText(newHealth);
+    }
+
+    private void UpdateHealthText(float health)
+    {
+        if (healthText != null)
+        {
+            healthText.text = $"Health: {health}"; // Update the TMP text
+        }
     }
 
     private void Die()
